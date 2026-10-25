@@ -10,8 +10,10 @@ APP_DIR = os.environ.get("CRAFT_APP", RADICE + "/app").replace("\\", "/").rstrip
 PROGETTI = os.environ.get("CRAFT_PROGETTI", RADICE + "/progetti").replace("\\", "/").rstrip("/")
 LIBRERIA_LIGHTCRAFT = os.environ.get("CRAFT_REGIA_LIBRERIA_LIGHTCRAFT", PROGETTI + "/_regia/libreria_lightcraft")
 
-# App che accettano le radici di automazione e vogliono percorsi relativi a progetti.
-CONFINATE = {"designcraft", "effectcraft", "figcraft", "pdfcraft", "photocraft",
+# App che accettano le radici di automazione e vogliono percorsi relativi a progetti (9 su 13).
+# DeckCraft dalla 0.10.0 (PR deckcraft #247): prima la regia non gliele passava (O12, O13 del 25/10/2026).
+# Senza opzione restano cadcraft, gridcraft, filmcraft, lightcraft: per loro vale solo la guardia.
+CONFINATE = {"deckcraft", "designcraft", "effectcraft", "figcraft", "pdfcraft", "photocraft",
              "soundcraft", "vectorcraft", "wordcraft"}
 
 
