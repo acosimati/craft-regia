@@ -1,0 +1,17 @@
+# installed apps, their downloads and the working folder (see README)
+app/
+scaricati/
+progetti/
+.mcp.json
+installazione.log
+
+# effects lab: npm packages and build output
+node_modules/
+laboratorio_effetti/effetti/gradiente/dist/
+
+# test outputs and caches
+*.log
+regia/prove/**/esiti_*.json
+O1_bersagli_fuori/
+__pycache__/
+*.pyc

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8"><title>vetro</title>
+<!-- Vetro liquido: liquid-glass-js (MIT, dashersw, commit 78cb6cc) collegato dalla cartella librerie/, non copiato;
+     html2canvas 1.4.1 da node_modules (niente CDN). Parametri dall'indirizzo: w, h, t (secondi),
+     sfondo (URL file di un'immagine), x, y, larghezza, altezza (pannello in px), raggio (angoli), tinta (opacità 0-1),
+     forma (rounded|pill|circle), deriva (px di oscillazione orizzontale), periodo (s), testo. -->
+<link rel="stylesheet" href="../../librerie/liquid-glass-js/glass.css">
+<style>
+html,body{margin:0;padding:0;overflow:hidden;background:#222}
+#sfondo{position:absolute;left:0;top:0;object-fit:cover;display:block}
+#posto{position:absolute;z-index:1}
+.glass-container{width:100%;height:100%;color:#fff;font:600 42px system-ui,sans-serif;text-shadow:0 2px 8px rgba(0,0,0,.35)}
+</style>
+</head><body>
+<img id="sfondo" alt="">
+<div id="posto"></div>
+<script src="../../node_modules/html2canvas/dist/html2canvas.min.js"></script>
+<script src="../../librerie/liquid-glass-js/container.js"></script>
+<script src="../../librerie/liquid-glass-js/button.js"></script>
+<script>
+"use strict";
+window.addEventListener("error", e => { window.__errore = String(e.message || e); });
+const q = new URLSearchParams(location.search);
+const num = (k, d, lo, hi) => { const v = parseFloat(q.get(k)); return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
+const W = num("w", 1280, 16, 3840), H = num("h", 720, 16, 2160), T0 = num("t", 0, -1e6, 1e6);
+document.body.style.width = W + "px"; document.body.style.height = H + "px";
+const pw = num("larghezza", Math.round(W * 0.45), 16, W), ph = num("altezza", Math.round(H * 0.4), 16, H);
+const px = num("x", Math.round((W - pw) / 2), -W, W), py = num("y", Math.round((H - ph) / 2), -H, H);
+const deriva = num("deriva", 0, 0, W), periodo = num("periodo", 4, 0.1, 600);
+const posto = document.getElementById("posto");
+posto.style.width = pw + "px"; posto.style.height = ph + "px";
+const colloca = t => { posto.style.left = (px + deriva * Math.sin(2 * Math.PI * t / periodo)) + "px"; posto.style.top = py + "px"; };
+colloca(T0);
+
+const img = document.getElementById("sfondo");
+img.style.width = W + "px"; img.style.height = H + "px";
+function sfondoPronto() {
+  return new Promise((ok, ko) => {
+    const src = q.get("sfondo");
+    if (!src) { // sfondo di riserva disegnato qui: strisce e cerchi
+      const c = document.createElement("canvas"); c.width = W; c.height = H; const x = c.getContext("2d");
+      for (let i = 0; i < 24; i++) { x.fillStyle = `hsl(${i * 15},80%,${45 + (i % 2) * 15}%)`; x.fillRect(i * W / 24, 0, W / 24 + 1, H); }
+      x.fillStyle = "#fff"; for (let i = 0; i < 12; i++) { x.beginPath(); x.arc((i + .5) * W / 12, H / 2, 30, 0, 6.3); x.fill(); }
+      img.src = c.toDataURL();
+    } else img.src = src;
+    img.onload = () => ok(); img.onerror = () => ko(new Error("sfondo non caricato: " + src));
+  });
+}
+const dueFrame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+let vetro = null;
+window.rendi = async (t) => {
+  colloca(t);
+  await new Promise(r => requestAnimationFrame(r));
+  vetro.render();
+  vetro.gl_refs.gl.finish();
+  await dueFrame();
+  return 1;
+};
+sfondoPronto().then(() => {
+  const forma = ["rounded", "pill", "circle"].includes(q.get("forma")) ? q.get("forma") : "rounded";
+  vetro = new Container({ borderRadius: num("raggio", 48, 0, 2000), type: forma, tintOpacity: num("tinta", 0.2, 0, 1) });
+  posto.appendChild(vetro.element);
+  if (q.get("testo")) { const s = document.createElement("span"); s.textContent = q.get("testo"); vetro.element.appendChild(s); }
+  vetro.updateSizeFromDOM();
+  let n = 0;
+  const attendi = async () => {
+    if (vetro.webglInitialized && vetro.render && vetro.width > 0) { await window.rendi(T0); window.__pronto = true; }
+    else if (n++ < 500) setTimeout(attendi, 20);
+    else window.__errore = "liquid-glass non inizializzato (html2canvas?)";
+  };
+  attendi();
+}).catch(e => { window.__errore = String(e.message || e); });
+</script></body></html>

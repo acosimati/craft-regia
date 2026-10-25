@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8"><title>metallo</title>
+<!-- Metallo liquido: shader GLSL scritto per il laboratorio (WebGL2, nessuna dipendenza).
+     Parametri dall'indirizzo: w, h, t (secondi), maschera (URL file di un PNG con alfa), tinta (#rrggbb),
+     rugosita (0-1), velocita, scala (0.1-1), fondo (#rrggbb), trasparente (1 = fondo trasparente). -->
+<style>html,body{margin:0;padding:0;overflow:hidden;background:transparent}canvas{display:block}</style>
+</head><body><canvas id="tela"></canvas>
+<script>
+"use strict";
+const q = new URLSearchParams(location.search);
+const num = (k, d, lo, hi) => { const v = parseFloat(q.get(k)); return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
+const hex = (k, d) => { const v = (q.get(k) || "").replace(/^#?/, ""); const s = /^[0-9a-fA-F]{6}$/.test(v) ? v : d;
+  return [0, 2, 4].map(i => parseInt(s.substr(i, 2), 16) / 255); };
+const W = num("w", 1280, 16, 3840), H = num("h", 720, 16, 2160), T0 = num("t", 0, -1e6, 1e6);
+const trasparente = ["1", "si", "true"].includes(q.get("trasparente"));
+const tela = document.getElementById("tela");
+tela.width = W; tela.height = H; tela.style.width = W + "px"; tela.style.height = H + "px";
+document.body.style.background = trasparente ? "transparent" : "#" + (q.get("fondo") || "101014").replace(/^#?/, "");
+window.addEventListener("error", e => { window.__errore = String(e.message || e); });
+
+const gl = tela.getContext("webgl2", { premultipliedAlpha: false, alpha: true, preserveDrawingBuffer: true, antialias: false });
+if (!gl) { window.__errore = "WebGL2 non disponibile"; throw new Error(window.__errore); }
+
+const VS = `#version 300 es
+in vec2 p; out vec2 uv;
+void main(){ uv = p * 0.5 + 0.5; gl_Position = vec4(p, 0.0, 1.0); }`;
+
+const FS = `#version 300 es
+precision highp float;
+in vec2 uv; out vec4 o;
+uniform sampler2D maschera; uniform vec2 ris; uniform vec2 rism; uniform float t, rug, vel, scala;
+uniform vec3 tinta, fondo; uniform float trasp;
+
+// rumore di valore 2D, liscio, per il flusso del liquido
+float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float rum(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+  return mix(mix(h21(i), h21(i+vec2(1,0)), f.x), mix(h21(i+vec2(0,1)), h21(i+vec2(1,1)), f.x), f.y); }
+float fbm(vec2 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++){ s += a * rum(p); p = p * 2.03 + 17.1; a *= 0.5; } return s; }
+
+// coordinate nella maschera: centrata, proporzioni rispettate, lato maggiore = scala
+vec2 inMaschera(vec2 fr){
+  vec2 px = fr * ris; float k = min(ris.x / rism.x, ris.y / rism.y) * scala;
+  return (px - 0.5 * ris) / (rism * k) + 0.5;
+}
+float A(vec2 m){ return (m.x < 0.0 || m.y < 0.0 || m.x > 1.0 || m.y > 1.0) ? 0.0 : texture(maschera, vec2(m.x, 1.0 - m.y)).a; }
+// altezza: alfa sfocata con i livelli della mipmap (sfocatura gratuita) = smusso morbido verso il bordo
+float Al(vec2 m, float l){ return (m.x < -0.05 || m.y < -0.05 || m.x > 1.05 || m.y > 1.05) ? 0.0 : textureLod(maschera, vec2(m.x, 1.0 - m.y), l).a; }
+float alt(vec2 m){ return 0.15 * Al(m, 1.0) + 0.25 * Al(m, 2.5) + 0.3 * Al(m, 3.5) + 0.3 * Al(m, 4.5); }
+// ambiente: cielo chiaro, orizzonte scuro, bande che scorrono (lo «studio» riflesso dal cromo)
+vec3 amb(vec3 d, float tt, vec2 pos){
+  float y = d.y * 1.4 + d.z * 0.0 + (pos.y - 0.5) * 1.3 + 0.15 * sin(d.x * 3.0 + pos.x * 2.0 + tt * 0.7);
+  float bande = 0.5 + 0.5 * sin(y * 9.0 + fbm(d.xy * 2.5 + tt * 0.25) * 4.0 - tt * 1.3);
+  vec3 cielo = mix(vec3(0.55, 0.6, 0.68), vec3(1.0), smoothstep(0.0, 0.9, y));
+  vec3 terra = mix(vec3(0.05, 0.05, 0.06), vec3(0.32, 0.3, 0.28), smoothstep(-1.0, -0.1, y));
+  vec3 c = y > 0.0 ? cielo : terra;
+  c = mix(c, c * 0.25, smoothstep(0.55, 0.95, bande) * 0.8);           // strisce scure
+  c += vec3(1.0) * pow(max(0.0, 1.0 - abs(y - 0.05) * 6.0), 6.0) * 0.9;  // linea di luce all'orizzonte
+  return c;
+}
+void main(){
+  vec2 m = inMaschera(uv);
+  float a = A(m);
+  vec2 e = vec2(4.0 / rism.x, 0.0);
+  float tt = t * vel;
+  // flusso del liquido: il rumore sposta la normale e scorre nel tempo
+  vec2 fl = vec2(fbm(m * 5.0 + vec2(tt * 0.35, -tt * 0.2)), fbm(m * 5.0 + 9.7 - vec2(tt * 0.25, tt * 0.3))) - 0.5;
+  float dx = alt(m + e.xy) - alt(m - e.xy), dy = alt(m + e.yx) - alt(m - e.yx);
+  vec3 n = normalize(vec3(-dx * 9.0 + fl.x * 0.7, -dy * 9.0 + fl.y * 0.7, 1.0));
+  vec3 v = vec3(0.0, 0.0, -1.0);
+  vec3 r = reflect(v, n);
+  // rugosità: media di più direzioni vicine (riflesso sfocato) e luce speculare più larga
+  vec3 c = vec3(0.0);
+  for (int i = 0; i < 5; i++){ float g = float(i) - 2.0;
+    c += amb(normalize(r + rug * 0.35 * vec3(g * 0.5, -g * 0.3, 0.0)), tt, m); }
+  c /= 5.0;
+  vec3 l = normalize(vec3(-0.5, 0.7, 0.6));
+  float sp = pow(max(dot(reflect(-l, n), -v), 0.0), mix(120.0, 8.0, rug)) * mix(1.4, 0.4, rug);
+  float fr = pow(1.0 - max(n.z, 0.0), 3.0);
+  vec3 met = c * tinta * (0.95 + 0.6 * fr) + sp;
+  met = met / (1.0 + met * 0.15);                                            // morbido sulle alte luci
+  vec3 col = mix(fondo, met, a);
+  o = vec4(col, trasp > 0.5 ? a : 1.0);
+}`;
+
+function compila(tipo, src) { const s = gl.createShader(tipo); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; }
+const pr = gl.createProgram();
+gl.attachShader(pr, compila(gl.VERTEX_SHADER, VS)); gl.attachShader(pr, compila(gl.FRAGMENT_SHADER, FS));
+gl.linkProgram(pr); if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr));
+gl.useProgram(pr);
+const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+const lp = gl.getAttribLocation(pr, "p"); gl.enableVertexAttribArray(lp); gl.vertexAttribPointer(lp, 2, gl.FLOAT, false, 0, 0);
+const U = n => gl.getUniformLocation(pr, n);
+gl.uniform2f(U("ris"), W, H);
+gl.uniform1f(U("rug"), num("rugosita", 0.25, 0, 1));
+gl.uniform1f(U("vel"), num("velocita", 1, 0, 20));
+gl.uniform1f(U("scala"), num("scala", 0.8, 0.1, 1));
+gl.uniform3fv(U("tinta"), hex("tinta", "dfe4ec"));
+gl.uniform3fv(U("fondo"), hex("fondo", "101014"));
+gl.uniform1f(U("trasp"), trasparente ? 1 : 0);
+gl.uniform1i(U("maschera"), 0);
+
+function caricaMaschera() {
+  return new Promise((ok, ko) => {
+    const src = q.get("maschera");
+    if (!src) { // maschera di riserva: un anello disegnato qui
+      const c = document.createElement("canvas"); c.width = c.height = 512; const x = c.getContext("2d");
+      x.lineWidth = 90; x.beginPath(); x.arc(256, 256, 180, 0, 6.2832); x.stroke(); return ok(c);
+    }
+    const im = new Image(); im.onload = () => ok(im); im.onerror = () => ko(new Error("maschera non caricata: " + src)); im.src = src;
+  });
+}
+const dueFrame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+window.rendi = async (t) => {
+  gl.viewport(0, 0, W, H); gl.uniform1f(U("t"), t);
+  gl.drawArrays(gl.TRIANGLES, 0, 3); gl.finish(); await dueFrame(); return 1;
+};
+caricaMaschera().then(async im => {
+  const tx = gl.createTexture(); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tx);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, im);
+  gl.generateMipmap(gl.TEXTURE_2D); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.uniform2f(U("rism"), im.width, im.height);
+  await window.rendi(T0);
+  window.__pronto = true;
+}).catch(e => { window.__errore = String(e.message || e); });
+</script></body></html>

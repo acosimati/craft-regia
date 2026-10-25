@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "craft-regia": {
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "-X",
+        "utf8",
+        "/path/to/craft-regia/regia/server.py"
+      ],
+      "env": {
+        "CRAFT_RADICE": "/path/to/craft-regia"
+      }
+    }
+  }
+}

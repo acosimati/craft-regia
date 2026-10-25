@@ -1,0 +1,21 @@
+{
+  "name": "laboratorio-effetti",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Laboratorio effetti della suite Craft: pagine statiche rese senza finestra",
+  "license": "MIT",
+  "scripts": {
+    "build": "node costruisci.mjs"
+  },
+  "dependencies": {
+    "@react-three/fiber": "9.8.2",
+    "@shadergradient/react": "2.4.20",
+    "html2canvas": "1.4.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}
