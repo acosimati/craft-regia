@@ -39,7 +39,7 @@ CASI = [
     ("gridcraft", "save_workbook", {"path": r"\srv\altrove\O1_bersagli_fuori\f22 a.xlsx"}, False),
     ("gridcraft", "save_workbook", {"path": r"C:..\O1_bersagli_fuori\f23 a.xlsx"}, False),
     ("deckcraft", "run_command", {"command": "x", "params": {"title": "C:..\\fuori a.txt"}}, False),
-    ("deckcraft", "add_text_box", {"text": "vedi /Users/x/f a.txt per favore"}, False),
+    ("filmcraft", "command_run", {"id": "file.newProject", "params": {"name": "vedi /Users/x/f a.txt per favore"}}, False),
     ("gridcraft", "save_workbook", {"path": "NUL"}, False),
     ("gridcraft", "save_workbook", {"path": "CON"}, False),
     ("gridcraft", "save_workbook", {"path": "_regia/com1.xlsx"}, False),

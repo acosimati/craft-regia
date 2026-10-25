@@ -3,7 +3,7 @@
 # 2) ogni valore che ha l'aspetto di un percorso, e OGNI valore di una chiave di percorso, deve restare
 #    dentro progetti (risolto con realpath: giunzioni e collegamenti vengono seguiti);
 # 3) i percorsi assoluti dentro progetti vengono riscritti nella forma che l'app accetta
-#    (relativi con «/» per le 8 confinate, assoluti con «/» per le 5 senza confini).
+#    (relativi con «/» per le 9 confinate, assoluti con «/» per le 4 senza confini: cadcraft, gridcraft, filmcraft, lightcraft).
 # Correzioni O2 (25/10/2026) dopo l'esame O1: vedi O2_RAPPORTO.md.
 import os, re
 from figli import PROGETTI, CONFINATE
