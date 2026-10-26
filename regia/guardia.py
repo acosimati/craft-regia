@@ -2,8 +2,10 @@
 # 1) strumenti e comandi rischiosi bloccati (script, plugin, scaricamenti, RPC grezzo, LISP);
 # 2) ogni valore che ha l'aspetto di un percorso, e OGNI valore di una chiave di percorso, deve restare
 #    dentro progetti (risolto con realpath: giunzioni e collegamenti vengono seguiti);
-# 3) i percorsi assoluti dentro progetti vengono riscritti nella forma che l'app accetta
-#    (relativi con «/» per le 9 confinate, assoluti con «/» per le 4 senza confini: cadcraft, gridcraft, filmcraft, lightcraft).
+# 3) i percorsi dentro progetti vengono riscritti nella forma che l'app accetta, secondo FORMA (misurata in O18a,
+#    26/10/2026, app per app: tutte e 13 accettano l'assoluto con «/»; EffectCraft rifiuta il relativo). Si passa
+#    sempre l'assoluto con «/» (non dipende dalla cwd); per EffectCraft anche un relativo con l'aspetto di un file
+#    viene riscritto assoluto (vedi _vale_come_file).
 # Correzioni O2 (25/10/2026) dopo l'esame O1: vedi O2_RAPPORTO.md.
 import os, re
 from figli import PROGETTI, CONFINATE
@@ -108,15 +110,37 @@ def dentro(assoluto):
     return p == RADICE or p.startswith(RADICE + os.sep)
 
 
+# Forma dei percorsi per app, misurata in O18a (26/10/2026): ogni app lanciata da sola, «nuovo» + «salva» con
+# relativo, assoluto con «/» e assoluto con «\» (PdfCraft: doc_open + doc_save; LightCraft: import + export).
+# «assoluto» = accetta SOLO l'assoluto (misurato: EffectCraft, «give an absolute path»);
+# «entrambe» = accetta relativo e assoluto (le altre 12): si passa l'assoluto con «/», più robusto rispetto alla cwd.
+# Un campione per app (il salvataggio); per EffectCraft O17 ha visto lo stesso rifiuto anche in lettura.
+FORMA = {"cadcraft": "entrambe", "deckcraft": "entrambe", "designcraft": "entrambe", "effectcraft": "assoluto",
+         "figcraft": "entrambe", "filmcraft": "entrambe", "gridcraft": "entrambe", "lightcraft": "entrambe",
+         "pdfcraft": "entrambe", "photocraft": "entrambe", "soundcraft": "entrambe", "vectorcraft": "entrambe",
+         "wordcraft": "entrambe"}
+
+
 def forma_per_app(app, s):
-    """Controlla il percorso e lo restituisce nella forma attesa dall'app."""
+    """Controlla il percorso e lo restituisce nella forma attesa dall'app (FORMA): assoluto con «/» per tutte.
+    Un'app fuori da FORMA riceve anch'essa l'assoluto, accettato da tutte e 13 nella misura O18a."""
     ass = risolvi(s)
     if not dentro(ass):
         raise Rifiuto("percorso fuori da progetti: %r → %s" % (s, ass.replace("\\", "/")))
-    if app in CONFINATE:
-        rel = os.path.relpath(ass, os.path.realpath(PROGETTI)).replace("\\", "/")
-        return "." if rel == "." else rel
     return ass.replace("\\", "/")
+
+
+def _vale_come_file(app, v):
+    """Per le app che accettano SOLO l'assoluto: un relativo in una chiave di percorso va riscritto se ha l'aspetto
+    di un file (estensione finale) o se la sua prima cartella esiste in progetti. «transform/position» o
+    «effects/#1/blurriness» (percorsi di proprietà di EffectCraft) non lo hanno e restano invariati."""
+    if FORMA.get(app) != "assoluto" or sembra_percorso(v):
+        return False
+    t = v.strip().replace("\\", "/")
+    if re.search(r"\.[A-Za-z0-9]{1,8}$", t):
+        return True
+    primo = t.split("/")[0]
+    return bool(primo) and "/" in t and os.path.isdir(os.path.join(PROGETTI, primo))
 
 
 def _parola_cad(t):
@@ -198,7 +222,7 @@ def _riscrivi(app, v, chiave, strumento, controlli):
             return v
         nuovo = forma_per_app(app, v)
         controlli.append(v)
-        return nuovo if sembra_percorso(v) else v
+        return nuovo if (sembra_percorso(v) or _vale_come_file(app, v)) else v
     if app not in CONFINATE and len(v) < 4000 and (" " in v.strip() or '"' in v):
         _testo_libero(app, v, False, controlli)
         return v

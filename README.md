@@ -22,7 +22,7 @@ The gateway (`regia/server.py`, Python, FastMCP) exposes **10 tools** instead of
 
 Key pieces:
 
-- **Path guard** (`regia/guardia.py`): every string that looks like a path (absolute, `..`, `~`, `%VAR%`, `file:`, UNC, device paths), including inside generic command `params`, batches and the CADCraft command line, is resolved with `realpath` and must lie inside `progetti/`. Four of the apps (CADCraft, FilmCraft, GridCraft, LightCraft) have no sandbox of their own; the other nine, DeckCraft included, are launched with `--automation-read-root`/`--automation-write-root` set to `progetti/`: the guard is what keeps them inside `progetti/`. Absolute paths inside `progetti/` are rewritten into the form each app accepts.
+- **Path guard** (`regia/guardia.py`): every string that looks like a path (absolute, `..`, `~`, `%VAR%`, `file:`, UNC, device paths), including inside generic command `params`, batches and the CADCraft command line, is resolved with `realpath` and must lie inside `progetti/`. Four of the apps (CADCraft, FilmCraft, GridCraft, LightCraft) have no sandbox of their own; the other nine, DeckCraft included, are launched with `--automation-read-root`/`--automation-write-root` set to `progetti/`: the guard is what keeps them inside `progetti/`. Paths inside `progetti/` are rewritten into the form each app accepts (`FORMA` in `guardia.py`, measured app by app: all 13 accept an absolute path with `/`, EffectCraft rejects relative ones), so every app receives an absolute path with `/`; for EffectCraft a relative value that looks like a file is made absolute too, while property paths such as `transform/position` pass unchanged.
 - **Blocked tools and commands**: CADCraft `script`, EffectCraft `run_script`/`script_ui`, PhotoCraft `control_call`, DeckCraft `call_app`, FilmCraft `ui_control`, the `script` parameter of DesignCraft `batch`; and, at any nesting depth, commands that run scripts, plug-ins, macros, installers, model downloads, the JavaScript console or LISP.
 - **Common verbs** (`regia/catalogo.py`): one vocabulary over the apps' different native names (`doc_save`, `save`, `save_workbook`, `save_presentation`, ...).
 - **Search with i18n**: command catalogues of the 13 apps normalised into one index (`regia/normalizza.py`, `regia/dati/`), with Italian labels from craft-i18n for 6 apps plus the common catalogue. A word naming an app (its name or a short alias such as pdf, word, excel, cad, video, audio) becomes the app filter when none is given: "metadati pdf" searches "metadati" inside PdfCraft.
@@ -59,7 +59,7 @@ The gateway finds `app/` and `progetti/` under the repository root. Override wit
 ## Tests
 
 ```
-python -X utf8 regia/prove/prova_guardia.py      # 69 path-guard cases, no app started
+python -X utf8 regia/prove/prova_guardia.py      # 69 path-guard cases + 9 path-form cases, no app started
 python -X utf8 regia/prove/prova_gateway.py      # 14 live checks over stdio (starts 4 apps, closes them)
 python -X utf8 regia/prove/O1/esame_o1.py        # adversarial exam: escape attempts must leave no file outside progetti/
 ```

@@ -90,5 +90,26 @@ for app, strum, arg, atteso in CASI:
     ok = esito == atteso
     errori += not ok
     print("%s %-8s %s.%s %s" % ("✓" if ok else "✗ SBAGLIATO", "passa" if esito else "RIFIUTO", app, strum, nota[:150]))
-print("\n%d casi, %d sbagliati" % (len(CASI), errori))
+# O18a: la FORMA riscritta (misurata app per app): assoluto con «/» per tutte; EffectCraft riceve l'assoluto anche da un
+# relativo con l'aspetto di un file, mentre i suoi percorsi di proprietà restano invariati.
+FORME = [
+    ("effectcraft", "save_project", {"path": "video_serata_jazz/titolo.ecproj"}, {"path": P + "/video_serata_jazz/titolo.ecproj"}),
+    ("effectcraft", "render_frame", {"path": P + "/video_serata_jazz/effetti/t.png"}, {"path": P + "/video_serata_jazz/effetti/t.png"}),
+    ("effectcraft", "command_run", {"id": "file.import", "params": {"paths": ["video_serata_jazz/a.png"]}},
+     {"id": "file.import", "params": {"paths": [P + "/video_serata_jazz/a.png"]}}),
+    ("effectcraft", "set_property", {"layer": 1, "path": "transform/position", "value": [1, 2]},
+     {"layer": 1, "path": "transform/position", "value": [1, 2]}),
+    ("effectcraft", "set_property", {"layer": "#1", "path": "effects/#1/blurriness", "value": 3},
+     {"layer": "#1", "path": "effects/#1/blurriness", "value": 3}),
+    ("photocraft", "doc_save", {"path": P + "/_regia/a.png"}, {"path": P + "/_regia/a.png"}),
+    ("photocraft", "doc_save", {"path": "_regia/a.png"}, {"path": "_regia/a.png"}),
+    ("wordcraft", "save_document", {"path": P.replace("/", "\\") + "\\_regia\\a.docx"}, {"path": P + "/_regia/a.docx"}),
+    ("gridcraft", "save_workbook", {"path": P + "/_regia/prova.xlsx"}, {"path": P + "/_regia/prova.xlsx"}),
+]
+for app, strum, arg, atteso in FORME:
+    nuovi, _ = esamina(app, strum, arg)
+    ok = nuovi == atteso
+    errori += not ok
+    print("%s forma %s.%s → %s" % ("✓" if ok else "✗ SBAGLIATO", app, strum, nuovi))
+print("\n%d casi + %d forme, %d sbagliati" % (len(CASI), len(FORME), errori))
 sys.exit(1 if errori else 0)

@@ -81,7 +81,7 @@ t = tool("app_verbo", app="cadcraft", verbo="salva", percorso="_regia/prova_gate
 esiti["cad_salva_dentro"] = os.path.exists(os.path.join(PROGETTI, "_regia/prova_gateway.dxf"))
 t = tool("app_verbo", app="cadcraft", verbo="salva", percorso=FUORI_CAD.replace("\\", "/"))
 esiti["cad_fuori_rifiutato"] = t.startswith("RIFIUTATO") and not os.path.exists(FUORI_CAD)
-# PhotoCraft con percorso relativo e con assoluto dentro progetti (la regia lo riscrive relativo)
+# PhotoCraft con assoluto dentro progetti (dal 26/10, O18a, la regia lo passa assoluto con «/»)
 tool("app_verbo", app="photocraft", verbo="nuovo", opzioni={"width": 64, "height": 64})
 t = tool("app_verbo", app="photocraft", verbo="salva", percorso=PROGETTI.replace("\\", "/") + "/_regia/prova_gateway.png")
 esiti["photo_assoluto_riscritto"] = os.path.exists(os.path.join(PROGETTI, "_regia/prova_gateway.png"))
