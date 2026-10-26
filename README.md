@@ -81,6 +81,7 @@ then collect the command catalogues again and run `python -X utf8 normalizza.py`
 - LightCraft uses its own library because a library can be opened by one process only.
 - Italian labels exist only for CADCraft, FilmCraft, PdfCraft, PhotoCraft, VectorCraft, WordCraft and the common catalogue.
 - Blocked tools are listed above; the block list is conservative and may refuse legitimate calls.
+- CADCraft evaluates LISP anywhere on its command line (measured once on 0.12.0: `circle 0,0 !r`, `circle 10,0 (+ 1 4)`), while at the TEXT «Enter text» prompt the same line stays text. The gateway does not know the prompt, so it refuses a line that starts with `(`, `!` or `'(`, a `(` followed by a known LISP form (`setq`, `command`, `load`, `defun`, `getpoint`, `strcat`, `+ - * /` followed by a space, `vl-`/`vla-`, … see `_LISP_FORME` in `regia/guardia.py`), and a word starting with `!` followed by a name. Text such as `PLAN (holes D6 through)` passes. A LISP function outside the list, placed after the first character, can pass: the defence remains the block on `script`/`appload`/`lisp` and path confinement.
 - `regia/dati/schemi.json` keeps the apps' own server instructions; where an app printed its local sandbox folder, it has been replaced by `<CRAFT_RADICE>\progetti`.
 
 ## License

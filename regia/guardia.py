@@ -157,10 +157,28 @@ def _comando_bloccato(app, cid):
     return bool(COMANDI_BLOCCATI.search(cid))
 
 
+# LISP nella riga di CADCraft (O22, 26/10). Misurato su cadcraft-cli 0.12.0, 1 volta ciascuno: al prompt dei comandi
+# `(setq r 3)` → 3, e anche in mezzo alla riga `circle 0,0 !r` → raggio 3, `circle 10,0 (+ 1 4)` → raggio 5;
+# al prompt «Enter text» di TEXT la stessa riga resta testo. La regia non conosce il prompt, quindi rifiuta:
+# (a) la riga che comincia con «(», «!» o «'(»; (b) una «(» seguita da una forma LISP nota; (c) una parola che
+# comincia con «!» seguita da un nome. Una parentesi con testo qualunque («PIANTA (fori D6 passanti)») passa.
+# Limite noto: una funzione LISP fuori elenco può passare; restano bloccati script/appload/lisp e i percorsi.
+_LISP_FORME = (
+    "setq set defun defun-q lambda progn if cond while repeat foreach mapcar apply eval read quote list cons car cdr "
+    "nth command command-s load findfile open close write-line read-line strcat substr itoa atoi atof rtos "
+    "getpoint getcorner getdist getangle getreal getint getstring getkword getvar setvar getenv setenv startapp "
+    "entmake entmod entget entsel ssget polar distance princ prin1 print alert"
+).split()
+_LISP_IN_RIGA = re.compile(
+    r"\(\s*(?:[-+*/](?=\s)|(?:vla|vlax|vlr|vl)-[\w-]+|(?:%s)(?![\w-]))" % "|".join(re.escape(f) for f in _LISP_FORME)
+    + r"|(?:^|[^\w!])!\s*[A-Za-z_*]", re.IGNORECASE)
+
+
 def _controlla_riga_cad(testo):
     """Riga di comando di CADCraft: niente LISP e nessuna parola che avvii un comando vietato
     (gli spazi valgono Invio, quindi ogni parola può essere un comando nuovo)."""
-    if "(" in testo or "!" in testo:
+    inizio = testo.lstrip()
+    if inizio.startswith(("(", "!", "'(")) or _LISP_IN_RIGA.search(testo):
         raise Rifiuto("LISP non ammesso nella riga di comando di CADCraft: %r" % testo)
     for parola in re.split(r"[\s;]+", testo):
         if parola and _parola_cad(parola) in CAD_VIETATI:
