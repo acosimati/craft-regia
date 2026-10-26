@@ -65,6 +65,11 @@ def _inoltra(app, strumento, argomenti):
     r = f.chiama(strumento, nuovi)
     immagini = _immagini(r)
     testo = _testo(r, bool(immagini))
+    if app == "pdfcraft" and not r.get("isError"):  # O15: il «doc» aperto diventa il default dei verbi
+        if strumento == "doc_open":
+            testo += "\n[regia: documento %s ricordato per salva/esporta/ispeziona/anteprima]" % catalogo.ricorda_doc(app, testo)
+        elif strumento == "doc_close" and nuovi.get("doc") == catalogo.ULTIMO_DOC.get(app):
+            catalogo.dimentica_doc(app)
     if controllati:
         testo += "\n[regia: percorsi controllati: %s]" % ", ".join(controllati)
     return testo, immagini
@@ -220,6 +225,7 @@ def suite_verbi() -> str:
 def app_chiudi(app: str = "") -> str:
     """Chiude un'app avviata (o tutte, senza argomento) in modo pulito. Salva prima: lo stato in memoria va perso."""
     esiti = FIGLI.chiudi(app or None)
+    catalogo.dimentica_doc(app or None)
     return "Chiuse: %s" % (json.dumps(esiti, ensure_ascii=False) if esiti else "nessuna app era avviata")
 
 

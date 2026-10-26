@@ -88,7 +88,9 @@ esiti["photo_assoluto_riscritto"] = os.path.exists(os.path.join(PROGETTI, "_regi
 tool("diario_scrivi", progetto="_regia", testo="prova del gateway eseguita", fase="revisione", app="gridcraft")
 t = tool("diario_leggi", progetto="_regia")
 esiti["diario"] = "prova del gateway" in t and "prova_gateway.xlsx" in t
-tool("suite_verbi")
+t = tool("suite_verbi")
+riga_word = next((r for r in t.splitlines() if r.startswith("| wordcraft ")), "")
+print("O15 suite_verbi, wordcraft elenca exportPdf ed exportPng:", "exportPdf" in riga_word and "exportPng" in riga_word)
 # O6: opzioni annidate spianate, e anteprima che arriva come blocco immagine vero
 tool("app_verbo", app="vectorcraft", verbo="nuovo", opzioni={"params": {"width": 100, "height": 100}})
 t = tool("app_verbo", app="vectorcraft", verbo="ispeziona")
@@ -108,6 +110,33 @@ riga_op = next((r for r in t1.splitlines() if r.strip().startswith("- opacity"))
 esiti["strumenti_parametri_descritti"] = ("Opacity in %" in riga_op and "0..100" in riga_op
                                           and "Returns the new object id." in t2)
 print("riga opacity:", riga_op)
+# O15: PdfCraft, «salva» senza doc → prima del doc_open messaggio chiaro; dopo «apri» la regia usa l'ultimo doc da sola.
+# Il PDF di partenza è un PDF minimo di una pagina scritto qui (nessun file esterno).
+def pdf_minimo(path):
+    oggetti = [b"<< /Type /Catalog /Pages 2 0 R >>", b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+               b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] >>"]
+    out, pos = bytearray(b"%PDF-1.4\n"), []
+    for i, o in enumerate(oggetti, 1):
+        pos.append(len(out))
+        out += b"%d 0 obj\n" % i + o + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(oggetti) + 1) + b"".join(b"%010d 00000 n \n" % x for x in pos)
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(oggetti) + 1, xref)
+    open(path, "wb").write(bytes(out))
+
+
+SORGENTE_REL, COPIA_REL = "_regia/O15/origine.pdf", "_regia/O15/copia.pdf"
+COPIA = os.path.join(PROGETTI, COPIA_REL)
+os.makedirs(os.path.dirname(COPIA), exist_ok=True)
+pdf_minimo(os.path.join(PROGETTI, SORGENTE_REL))
+if os.path.exists(COPIA):
+    os.remove(COPIA)
+t0 = tool("app_verbo", app="pdfcraft", verbo="salva", percorso=COPIA_REL)
+t1 = tool("app_verbo", app="pdfcraft", verbo="apri", percorso=SORGENTE_REL)
+t2 = tool("app_verbo", app="pdfcraft", verbo="ispeziona")
+t3 = tool("app_verbo", app="pdfcraft", verbo="salva", percorso=COPIA_REL)
+esiti["pdf_salva_senza_doc"] = ("apri prima un PDF" in t0 and "ricordato" in t1 and "ERRORE" not in t2 + t3
+                                and os.path.exists(COPIA) and os.path.getsize(COPIA) > 0)
 t = tool("app_chiudi")
 esiti["chiusura"] = "chiuso" in t
 

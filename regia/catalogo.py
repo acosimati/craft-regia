@@ -48,6 +48,44 @@ def PER_ESTENSIONE(tabella, altrimenti):
     def f(percorso, opz):
         est = os.path.splitext(percorso or "")[1].lower().lstrip(".")
         return tabella.get(est, altrimenti)(percorso, opz)
+    f.tabella, f.altrimenti = tabella, altrimenti  # O15: suite_verbi elenca tutti i casi, non solo il primo
+    return f
+
+
+# O15: PdfCraft vuole «doc» (id del documento aperto) in doc_save, doc_inspect, render_preview. La regia ricorda
+# l'ultimo id restituito da doc_open (per app) e lo usa come default se le opzioni non lo danno.
+ULTIMO_DOC = {}
+
+
+def ricorda_doc(app, testo):
+    """Dopo un doc_open riuscito: prende l'id dal JSON di risposta ({"doc": N, ...})."""
+    m = re.search(r'"doc"\s*:\s*(\d+)', testo or "")
+    if m:
+        ULTIMO_DOC[app] = int(m.group(1))
+    return ULTIMO_DOC.get(app)
+
+
+def dimentica_doc(app=None):
+    if app:
+        ULTIMO_DOC.pop(app, None)
+    else:
+        ULTIMO_DOC.clear()
+
+
+def DOC(app, strumento, chiave=None, obbligatorio=True):
+    """Come T(...), più «doc» = ultimo documento aperto con «apri», se le opzioni non lo danno."""
+    def f(percorso, opz):
+        a = {}
+        if chiave and percorso is not None:
+            a[chiave] = percorso
+        a.update(opz)
+        if "doc" not in a:
+            if app in ULTIMO_DOC:
+                a["doc"] = ULTIMO_DOC[app]
+            elif obbligatorio:
+                raise ValueError("apri prima un PDF (app_verbo %s apri <percorso>) oppure passa opzioni {\"doc\": N}" % app)
+        return strumento, a
+    f.strumento = strumento
     return f
 
 
@@ -95,8 +133,10 @@ VERBI = {
                     "salva": T("save_file", "path"), "esporta": T("export", "path"), "ispeziona": T("doc_inspect"),
                     "anteprima": T("render_preview"), "inserisci": C("command_run", "id", "file.place", "path")},
     "pdfcraft": {"nuovo": NON_C_E("PdfCraft non crea PDF vuoti: esporta in PDF da un'altra app, poi aprilo"),
-                 "apri": T("doc_open", "path"), "salva": T("doc_save", "path"), "esporta": T("doc_save", "path"),
-                 "ispeziona": T("doc_inspect"), "anteprima": T("render_preview"),
+                 "apri": T("doc_open", "path"), "salva": DOC("pdfcraft", "doc_save", "path"),
+                 "esporta": DOC("pdfcraft", "doc_save", "path"),
+                 "ispeziona": DOC("pdfcraft", "doc_inspect", obbligatorio=False),  # senza doc: tutti gli aperti
+                 "anteprima": DOC("pdfcraft", "render_preview"),
                  "inserisci": NON_C_E("per unire PDF usa app_usa pdfcraft doc_combine {paths, out}")},
     "wordcraft": {"nuovo": T("new_document"), "apri": T("open_document", "path"), "salva": T("save_document", "path"),
                   "esporta": PER_ESTENSIONE({"pdf": C("execute", "command", "file.exportPdf", "path"),
@@ -146,6 +186,18 @@ def traduci_verbo(app, verbo, percorso=None, opzioni=None):
     return VERBI[app][verbo](percorso, opz)
 
 
+def _nome_verbo(fn, percorso="x/esempio.png"):
+    """strumento(comando) dietro a un costruttore; per PER_ESTENSIONE tutti i casi: «pdf→execute(file.exportPdf), …»."""
+    if hasattr(fn, "tabella"):
+        casi = ["%s→%s" % (est, _nome_verbo(c, "x/esempio." + est)) for est, c in fn.tabella.items()]
+        return ", ".join(casi) + ", altrimenti " + _nome_verbo(fn.altrimenti, "x/esempio")
+    if hasattr(fn, "strumento"):
+        return fn.strumento
+    s, a = fn(percorso, {})
+    cmd = a.get("id") or a.get("command")
+    return s + ("(%s)" % cmd if isinstance(cmd, str) else "")
+
+
 def tabella_verbi():
     """Per ogni app e verbo, lo strumento vero (mostra le incoerenze dei nomi)."""
     out = {}
@@ -153,9 +205,7 @@ def tabella_verbi():
         riga = {}
         for v in NOMI_VERBI:
             try:
-                s, a = vv[v]("x/esempio.png", {})
-                cmd = a.get("id") or a.get("command")
-                riga[v] = s + ("(%s)" % cmd if isinstance(cmd, str) else "")
+                riga[v] = _nome_verbo(vv[v])
             except ValueError as e:
                 riga[v] = "— " + str(e)
         out[app] = riga
@@ -242,9 +292,51 @@ def _corrisponde(q, parole):
     return 0.0
 
 
+# O15: sinonimi italiani → inglesi, applicati alle parole della ricerca prima del confronto (servono dove l'app non
+# ha la traduzione di craft-i18n, es. GridCraft, e per gli strumenti MCP, che hanno solo nomi inglesi).
+# Ogni parola cerca sé stessa OPPURE uno dei suoi sinonimi: vale il confronto migliore.
+SINONIMI = {
+    "somma": ["sum", "autosum"], "media": ["average", "mean"], "tabella": ["table"], "grafico": ["chart", "graph"],
+    "esporta": ["export"], "salva": ["save"], "apri": ["open"], "unisci": ["combine", "merge"], "dividi": ["split"],
+    "pagina": ["page"], "intestazione": ["header"], "immagine": ["image", "picture"], "testo": ["text"],
+    "stile": ["style"], "cerca": ["find", "search"], "trova": ["find", "search"], "sostituisci": ["replace"],
+    "ruota": ["rotate"], "ritaglia": ["crop"], "colonna": ["column"], "riga": ["row"], "cella": ["cell"],
+    "formula": ["formula"], "grassetto": ["bold"], "corsivo": ["italic"], "allinea": ["align"], "margine": ["margin"],
+    "numero": ["number"], "barre": ["bar"], "barra": ["bar"], "paragrafo": ["paragraph", "para"],
+    "documento": ["document", "doc"], "informazioni": ["info", "information", "properties"], "estrai": ["extract"],
+    "metadati": ["metadata"], "titolo": ["title", "heading"], "autore": ["author"], "valuta": ["currency"],
+    "inserisci": ["insert"],
+}
+# frasi che vanno lette insieme (prima delle parole singole): «piè» da solo sarebbe «pie» (grafico a torta)
+FRASI = {"pie di pagina": [["footer"]], "salto di pagina": [["break"], ["page", "pagina"]],
+         "salto pagina": [["break"], ["page", "pagina"]], "numero di pagina": [["number", "numero"], ["page", "pagina"]]}
+VUOTE = {"il", "lo", "la", "di", "da", "in", "un", "una", "the", "of", "a", "to", "con", "per", "e", "come", "dove", "si"}
+BONUS_STRUMENTO = 0.3  # O15: a parità, lo strumento MCP (chiamabile per nome) passa davanti al comando di menu
+
+
+def _concetti(testo):
+    """La ricerca diventa una lista di concetti; ogni concetto è l'elenco delle forme accettate (italiano + sinonimi)."""
+    t = " ".join(_parole(testo))
+    t = re.sub(r"\bdove si trova\b", " ", t)
+    concetti = []
+    for frase, cc in FRASI.items():
+        if re.search(r"\b%s\b" % frase, t):
+            concetti += cc
+            t = re.sub(r"\b%s\b" % frase, " ", t)
+    for q in t.split():
+        if len(q) > 1 and q not in VUOTE:
+            concetti.append([q] + SINONIMI.get(q, []))
+    return concetti
+
+
+def _esatta(q, parole):
+    """Per i sinonimi inglesi: parola esatta o col plurale in -s, senza radici (O15: «currency» non deve valere «current»)."""
+    return 1.0 if (q in parole or q + "s" in parole) else 0.0
+
+
 def cerca(testo, app=None, limite=15):
     idx = indice()
-    qs = [q for q in _parole(testo) if len(q) > 1 and q not in {"il", "lo", "la", "di", "da", "in", "un", "una", "the", "of", "a", "to", "con", "per", "e", "come", "dove", "si", "trova"}]
+    qs = _concetti(testo)
     if not qs:
         return []
     ris = []
@@ -252,15 +344,17 @@ def cerca(testo, app=None, limite=15):
         if app and v["app"] != app:
             continue
         punti, coperte = 0.0, 0
-        for q in qs:
-            m = max(3 * _corrisponde(q, v["_t"]["forte"]), 1.5 * _corrisponde(q, v["_t"]["medio"]),
-                    0.5 * _corrisponde(q, v["_t"]["debole"]))
+        for forme in qs:
+            m = max(max(3 * f(q, v["_t"]["forte"]), 1.5 * f(q, v["_t"]["medio"]), 0.5 * f(q, v["_t"]["debole"]))
+                    for q, f in zip(forme, [_corrisponde] + [_esatta] * (len(forme) - 1)))
             punti += m
             coperte += m > 0
         if coperte:
             punti *= coperte / len(qs)  # premia chi copre tutte le parole
             if v["tipo"] == "comando" and v["etichetta_it"]:
                 punti += 0.1
+            if v["tipo"] == "strumento":
+                punti += BONUS_STRUMENTO
             ris.append((punti, v))
     ris.sort(key=lambda x: -x[0])
     return [dict({k: x for k, x in v.items() if not k.startswith("_")}, punti=round(p, 2)) for p, v in ris[:limite]]
