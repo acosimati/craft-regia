@@ -334,8 +334,33 @@ def _esatta(q, parole):
     return 1.0 if (q in parole or q + "s" in parole) else 0.0
 
 
+# O16-bis: una parola che nomina un'app (nome o alias breve) diventa il filtro `app`, se non è già dato
+# («metadati pdf» = «metadati» dentro PdfCraft: la parola «pdf» non compare negli strumenti di PdfCraft).
+ALIAS_APP = {"pdf": "pdfcraft", "word": "wordcraft", "excel": "gridcraft", "foglio": "gridcraft",
+             "powerpoint": "deckcraft", "slide": "deckcraft", "photoshop": "photocraft", "foto": "photocraft",
+             "illustrator": "vectorcraft", "vettoriale": "vectorcraft", "indesign": "designcraft",
+             "impaginazione": "designcraft", "cad": "cadcraft", "autocad": "cadcraft", "video": "filmcraft",
+             "premiere": "filmcraft", "audio": "soundcraft", "protools": "soundcraft", "figma": "figcraft",
+             "lightroom": "lightcraft", "aftereffects": "effectcraft", "effetti": "effectcraft"}
+
+
+def _app_dalla_ricerca(testo):
+    """(app, testo senza quella parola) se una parola è il nome o l'alias di un'app; altrimenti (None, testo)."""
+    parole = _parole(testo)
+    for i, w in enumerate(parole):
+        a = w if w in APP else ALIAS_APP.get(w)
+        if a:
+            return a, " ".join(parole[:i] + parole[i + 1:])
+    return None, testo
+
+
 def cerca(testo, app=None, limite=15):
     idx = indice()
+    if not app:
+        app, testo = _app_dalla_ricerca(testo)
+        if app and not _concetti(testo):  # solo il nome dell'app: i suoi primi strumenti
+            return [dict({k: x for k, x in v.items() if not k.startswith("_")}, punti=0.0)
+                    for v in idx["voci"] if v["app"] == app and v["tipo"] == "strumento"][:limite]
     qs = _concetti(testo)
     if not qs:
         return []
