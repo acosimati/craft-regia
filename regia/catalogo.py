@@ -341,13 +341,20 @@ ALIAS_APP = {"pdf": "pdfcraft", "word": "wordcraft", "excel": "gridcraft", "fogl
              "illustrator": "vectorcraft", "vettoriale": "vectorcraft", "indesign": "designcraft",
              "impaginazione": "designcraft", "cad": "cadcraft", "autocad": "cadcraft", "video": "filmcraft",
              "premiere": "filmcraft", "audio": "soundcraft", "protools": "soundcraft", "figma": "figcraft",
-             "lightroom": "lightcraft", "aftereffects": "effectcraft", "effetti": "effectcraft"}
+             "lightroom": "lightcraft", "aftereffects": "effectcraft"}
+# O16-ter: gli alias che sono anche formati di file non filtrano se la ricerca ha un verbo di uscita/ingresso
+# («esporta pdf» = esportare in PDF da qualunque app, non «esporta» dentro PdfCraft). «effetti» tolto: parola comune.
+ALIAS_FORMATO = {"pdf", "foto", "video", "audio"}
+VERBI_IO = {"esporta", "salva", "converti", "stampa", "apri", "importa", "export", "save", "print", "open", "import"}
 
 
 def _app_dalla_ricerca(testo):
     """(app, testo senza quella parola) se una parola è il nome o l'alias di un'app; altrimenti (None, testo)."""
     parole = _parole(testo)
+    io = bool(VERBI_IO & set(parole))
     for i, w in enumerate(parole):
+        if io and w in ALIAS_FORMATO:
+            continue
         a = w if w in APP else ALIAS_APP.get(w)
         if a:
             return a, " ".join(parole[:i] + parole[i + 1:])
